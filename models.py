@@ -11,7 +11,7 @@ def register_model(cls):
   n = cls.__name__
   if n in _MODELS:
     raise ValueError("Already exists")
-  _MODELS[n] = _MODELS
+  _MODELS[n] = cls 
   return cls
 
 
@@ -20,7 +20,7 @@ def get_model(name, *args, **kwargs):
 
 
 depth_map = {
-  18 : resnet.resnet18
+  18 : resnet.resnet18,
   34 : resnet.resnet34,
   50 : resnet.resnet50,
   101 : resnet.resnet101
