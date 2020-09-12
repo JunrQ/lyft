@@ -2,6 +2,15 @@
 
 [Kaggle compete](https://www.kaggle.com/c/lyft-motion-prediction-autonomous-vehicles)
 
+
+## TODO LIST
+
+- [ ] Run baseline for cnn model
+- [ ] Predict confidence for regression model
+- [ ] Run baseline for cnn-rnn model
+- [ ] Multi-model
+
+
 ## Training
 
 * Support auto resume
