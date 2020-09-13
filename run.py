@@ -76,9 +76,9 @@ trainer = Trainer(save_path=args.dir,
 
 logger.info("Get dataset")
 train_ds = get_dataset(data_config, 'train')
-# valid_ds = get_dataset(data_config, 'valid')
+valid_ds = get_dataset(data_config, 'valid')
 trainer.set_train_dataset(train_ds)
-# trainer.set_valid_dataset(valid_ds)
+trainer.set_eval_dataset(valid_ds)
 
 trainer.train()
 

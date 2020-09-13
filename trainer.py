@@ -72,7 +72,7 @@ class Trainer(object):
 
     steps = 0
     total_loss = 0.0
-    for batch_idx, sample in tqdm(enumerate(self.train_dataset), position=0, leave=True):
+    for batch_idx, sample in tqdm(enumerate(self.eval_dataset), position=0, leave=True):
       for k in sample.keys():
         sample[k] = sample[k].to(self.device)
 
@@ -141,11 +141,13 @@ class Trainer(object):
       self.epoch += 1
 
   def save_model(self):
+    path = "%s/ckpt.%d.pth" % (self.save_path, self.global_steps)
+    self.logger.info("Save model to %s" % path)
     torch.save({
       'model_state_dict' : self.model.state_dict(),
       'optimizer_state_dict' : self.optimizer.state_dict(),
       'scheduler_state_dict' : self.scheduler.state_dict(),
       'epoch' : self.epoch,
       'steps' : self.global_steps,
-    }, "%s/ckpt.%d.pth" % (self.save_path, self.global_steps))
+    }, "%s/ckpt.%d.pth" % path)
 
