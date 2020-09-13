@@ -29,9 +29,11 @@ depth_map = {
 
 @register_model
 class ResNetModel(nn.Module):
-  def __init__(self, depth, input_channels, num_outputs):
+  def __init__(self, depth, input_channels, num_outputs,
+               predict_classes=False):
     super().__init__()
     self.depth = depth
+    self.predict_classes = predict_classes
     self.backbone = depth_map[depth](pretrained=True, progress=True)
 
     self.backbone.conv1 = nn.Conv2d(
@@ -47,7 +49,13 @@ class ResNetModel(nn.Module):
         nn.Linear(in_features=backbone_out_features, out_features=1024),
         nn.ReLU())
     self.logit = nn.Linear(1024, out_features=num_outputs)
-        
+
+    if self.predict_classes:
+      self.cls_head = nn.Sequential(
+        nn.Linear(in_features=backbone_out_features, out_features=256),
+        nn.ReLU(),
+        nn.Linear(in_features=256, out_features=num_outputs // 2))
+
   def forward(self, sample):
     x = sample["image"]
 
@@ -64,9 +72,14 @@ class ResNetModel(nn.Module):
     x = self.backbone.avgpool(x)
     x = torch.flatten(x, 1)
 
-    x = self.head(x)
-    x = self.logit(x)
-    return x
+    r = self.head(x)
+    r = self.logit(r)
+
+    if self.predict_classes:
+      c = F.sigmoid(self.cls_head(x))
+      return r, c
+    else:
+      return r
 
 
 class Encoder(nn.Module):

@@ -17,7 +17,8 @@ class Trainer(object):
                auto_resume=True,
                log_frequence=500,
                save_frequence=1000,
-               eval_frequence=0):
+               eval_frequence=0,
+               cls_loss_weight=0.1):
     self.init_state()
     self.save_path = save_path
     self.log_frequence = log_frequence
@@ -29,6 +30,7 @@ class Trainer(object):
     # If max_steps and max_epoch bost set,
     # Consider max_steps first
     self.max_steps = max_steps
+    self.cls_loss_weight = cls_loss_weight
 
     self.model = model
     self.optimizer = optimizer
@@ -76,7 +78,10 @@ class Trainer(object):
       for k in sample.keys():
         sample[k] = sample[k].to(self.device)
 
-      outputs = self.model(sample) # Accept sample as input
+      if self.model.predict_classes:
+        outputs, probs = self.model(sample)
+      else:
+        outputs = self.model(sample) # Accept sample as input
       target_availabilities = sample["target_availabilities"].unsqueeze(-1)
       targets = sample["target_positions"]
       outputs = outputs.reshape(targets.shape)
@@ -98,13 +103,22 @@ class Trainer(object):
         sample[k] = sample[k].to(self.device)
       self.optimizer.zero_grad()
 
-      outputs = self.model(sample) # Accept sample as input
-      target_availabilities = sample["target_availabilities"].unsqueeze(-1)
+      target_availabilities = sample["target_availabilities"]
       targets = sample["target_positions"]
-      outputs = outputs.reshape(targets.shape)
-      loss = self.criterion(outputs, targets)
-      loss = loss * target_availabilities
-      loss = loss.mean()
+      if self.model.predict_classes:
+        r, c = self.model(sample)
+        r = r.reshape(targets.shape)
+        loss = self.criterion(r, targets)
+        loss = loss * target_availabilities.unsqueeze(-1)
+        loss = loss.mean()
+        cls_loss = nn.BCELoss(reduction='mean')(c, target_availabilities)
+        loss = loss + self.cls_loss_weight * cls_loss
+      else:
+        outputs = self.model(sample) # Accept sample as input
+        outputs = outputs.reshape(targets.shape)
+        loss = self.criterion(outputs, targets)
+        loss = loss * target_availabilities.unsqueeze(-1)
+        loss = loss.mean()
       loss.backward()
       self.optimizer.step()
 
