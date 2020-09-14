@@ -30,10 +30,11 @@ depth_map = {
 @register_model
 class ResNetModel(nn.Module):
   def __init__(self, depth, input_channels, num_outputs,
-               predict_classes=False):
+               predict_classes=False, down_sample_times=4):
     super().__init__()
     self.depth = depth
     self.predict_classes = predict_classes
+    self.down_sample_times = down_sample_times
     self.backbone = depth_map[depth](pretrained=True, progress=True)
 
     self.backbone.conv1 = nn.Conv2d(
@@ -50,6 +51,18 @@ class ResNetModel(nn.Module):
         nn.ReLU())
     self.logit = nn.Linear(1024, out_features=num_outputs)
 
+    if self.down_sample_times > 4:
+      extra_downsample_list = []
+      last_channels = 64
+      for _ in range(4, self.down_sample_times):
+        extra_downsample_list += [
+          nn.Conv2d(last_channels, last_channels, kernel_size=3, stride=2,
+                    padding=1, bias=False),
+          nn.BatchNorm2d(last_channels),
+          nn.ReLU(),
+        ]
+      self.extra_downsample_list = nn.Sequential(*extra_downsample_list)
+
     if self.predict_classes:
       self.cls_head = nn.Sequential(
         nn.Linear(in_features=backbone_out_features, out_features=256),
@@ -63,6 +76,9 @@ class ResNetModel(nn.Module):
     x = self.backbone.bn1(x)
     x = self.backbone.relu(x)
     x = self.backbone.maxpool(x)
+
+    if self.down_sample_times > 4:
+      x = self.extra_downsample_list(x)
 
     x = self.backbone.layer1(x)
     x = self.backbone.layer2(x)

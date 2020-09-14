@@ -163,5 +163,5 @@ class Trainer(object):
       'scheduler_state_dict' : self.scheduler.state_dict(),
       'epoch' : self.epoch,
       'steps' : self.global_steps,
-    }, "%s/ckpt.%d.pth" % path)
+    }, path)
 

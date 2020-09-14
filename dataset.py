@@ -11,7 +11,22 @@ from l5kit.rasterization import build_rasterizer
 from utils import parse_config
 
 
-def get_dataset(config, name='train', batch_size=None):
+def get_dataset(config, name='train', source='raw', dataloader=True):
+  if source == 'raw':
+    return get_dataset_from_raw(config=config, name=name, dataloader=dataloader)
+  elif source == 'npz':
+    return get_dataset_from_npz(config=config, name=name, dataloader=dataloader)
+  else:
+    raise TypeError("%s not supported" % source)
+
+
+def get_dataset_from_npz(config, name='train', dataloader=True):
+  dir_input = config['path']
+  pass
+
+
+
+def get_dataset_from_raw(config, name='train', dataloader=True):
   dir_input = config['path']
   # set env variable for data
   os.environ["L5KIT_DATA_FOLDER"] = dir_input
@@ -22,6 +37,8 @@ def get_dataset(config, name='train', batch_size=None):
     # Train dataset/dataloader
     train_zarr = ChunkedDataset(dm.require(config['train_data_loader']["key"])).open()
     train_dataset = AgentDataset(config, train_zarr, rasterizer)
+    if not dataloader:
+      return train_dataset
     train_dataloader = DataLoader(train_dataset,
                                   shuffle=config['train_data_loader']["shuffle"],
                                   batch_size=config['train_data_loader']["batch_size"] if batch_size is None else batch_size,
@@ -31,6 +48,8 @@ def get_dataset(config, name='train', batch_size=None):
     # Valid dataset/dataloader
     valid_zarr = ChunkedDataset(dm.require(config['validate_data_loader']["key"])).open()
     valid_dataset = AgentDataset(config, valid_zarr, rasterizer)
+    if not dataloader:
+      return valid_dataset
     valid_dataloader = DataLoader(valid_dataset,
                                   shuffle=config['validate_data_loader']["shuffle"],
                                   batch_size=config['validate_data_loader']["batch_size"] if batch_size is None else batch_size,
@@ -39,6 +58,8 @@ def get_dataset(config, name='train', batch_size=None):
   elif name == 'sample':
     sample_zarr = ChunkedDataset(dm.require(config['sample_data_loader']["key"])).open()
     sample_dataset = AgentDataset(config, sample_zarr, rasterizer)
+    if not dataloader:
+      return sample_dataset
     sample_dataloader = DataLoader(sample_dataset,
                                   shuffle=config['sample_data_loader']["shuffle"],
                                   batch_size=config['sample_data_loader']["batch_size"] if batch_size is None else batch_size,
@@ -48,6 +69,8 @@ def get_dataset(config, name='train', batch_size=None):
     test_zarr = ChunkedDataset(dm.require(config['test_data_loader']["key"])).open()
     test_mask = np.load(f"{dir_input}/scenes/mask.npz")["arr_0"]
     test_dataset = AgentDataset(config, test_zarr, rasterizer, agents_mask=test_mask)
+    if not dataloader:
+      return test_dataset
     test_dataloader = DataLoader(test_dataset,
                                  shuffle=config['test_data_loader']["shuffle"],
                                  batch_size=config['test_data_loader']["batch_size"] if batch_size is None else batch_size,
@@ -65,14 +88,22 @@ if __name__ == '__main__':
   parser.add_argument('--name', type=str, help='Train, valid, test or sample')
   args = parser.parse_args()
 
-  n = args.name
-  _, data_config = parse_config(args.config)
-  dataset = get_dataset(data_config, n, batch_size=1)
-  length_per_dir = 204800
+  raise False, "Too big, not gonna work"
 
-  for i in range(len(dataset)):
+  n = args.name
+  root_path = os.path.join(args.dir, n)
+  if not os.path.isdir(root_path):
+    os.mkdir(root_path)
+  _, data_config = parse_config(args.config)
+  dataset = get_dataset_from_raw(data_config, n, dataloader=False)
+  length_per_dir = 20480 * 4
+
+  total_len = len(dataset)
+  print("Generate %s with length %d" % (n, total_len))
+
+  for i in range(total_len):
     save_index = i // length_per_dir
-    output_path = os.path.join(args.dir, '%d' % save_index)
+    output_path = os.path.join(root_path, '%d' % save_index)
     if not os.path.isdir(output_path):
       os.mkdir(output_path)
     filename = "%d.npz" % (i % length_per_dir)
@@ -84,8 +115,5 @@ if __name__ == '__main__':
       print("Save to %s" % output_filename)
 
     sample = dataset[i]
-    save_dict = {}
-    for k, v in sample.items():
-      v = v.unsqueeze(0).numpy()
-      save_dict[k] = v
-    np.savez(, **save_dict)
+    np.savez(output_filename, **sample)
+
