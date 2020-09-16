@@ -99,7 +99,7 @@ class ResNetModel(nn.Module):
 
 
 class Encoder(nn.Module):
-  def __init__(self, input_channels, num_outputs, 
+  def __init__(self, input_channels, 
                depth=50, encoder_feature_size=1024):
     super(Encoder, self).__init__()
     self.enc_image_size = encoded_image_size
@@ -116,7 +116,7 @@ class Encoder(nn.Module):
     self.resnet = nn.Sequential(*modules)
     self.adaptive_pool = nn.AdaptiveAvgPool2d((1, 1))
     self.fc = nn.Linear(backbone_out_features, encoder_feature_size, bias=False)
-    self.fine_tune()
+    # self.fine_tune()
 
   def forward(self, images):
     out = self.resnet(images)
@@ -136,10 +136,10 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-  def __init__(self, decoder_dim=2048,
-               encoder_dim=2048,
-               dropout=0.5,
+  def __init__(self, decoder_dim=512,
+               encoder_dim=512,
                prediction_length=50,
+               input_dim=512,
                positions=10):
     super(Decoder, self).__init__()
     positions += 1 # plus 1
@@ -147,11 +147,12 @@ class Decoder(nn.Module):
     self.decoder_dim = decoder_dim
     self.prediction_length = prediction_length
 
-    self.decode_step = nn.LSTMCell(input_size=encoder_dim,
-                                    hidden_size=decoder_dim,
-                                    bias=True)
+    self.decode_step = nn.LSTMCell(input_size=input_dim,
+                                   hidden_size=decoder_dim,
+                                   bias=True)
     self.init_h = nn.Linear(positions * 2, decoder_dim)
     self.init_c = nn.Linear(encoder_dim, decoder_dim)
+    self.input_encoder = nn.Linear(encoder_dim + decoder_dim, input_dim)
     self.predict_layer = nn.Linear(decoder_dim, 2)
 
   def init_hidden_state(self, positions, encoder_out):
@@ -168,21 +169,29 @@ class Decoder(nn.Module):
 
     outputs = []
     for i in range(self.prediction_length):
-      h, c = self.decode_step(encoder_out, (h, c)) # TODO input
+      input = self.input_encoder(torch.cat([encoder_out, h]))
+      h, c = self.decode_step(input, (h, c)) # TODO input
       preds = self.predict_layer(h)
       outputs.append(preds)
 
     output = torch.concat(outputs, dim=1)
     return output
 
+
 @register_model
 class EncoderDecoder(nn.Module):
   def __init__(self, decoder_params,
-               encoder_params,):
-
+               encoder_params):
     super(EncoderDecoder, self).__init__(self)
-
-
     self.decoder = Decoder(**decoder_params)
     self.encoder = Encoder(**encoder_params)
 
+  def forward(self, sample):
+    image = sample['image']
+    n, c, h, w = image.shape
+    history_positions = sample['history_positions'].view((n, -1))
+
+    encoder_output = self.encoder(image)
+    output = self.decoder(history_positions, encoder_output)
+
+    return output
